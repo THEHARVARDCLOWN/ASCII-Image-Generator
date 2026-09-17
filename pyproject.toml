@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "asciify"
+version = "2.1.0"
+description = "Image to ASCII art converter with perceptual color for terminals, HTML and PNG"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["Pillow>=10.1", "numpy>=1.22"]
+
+[project.optional-dependencies]
+heif = ["pillow-heif>=0.16"]
+
+[project.scripts]
+asciify = "asciify.cli:main"
+
+[tool.setuptools]
+packages = ["asciify"]
+
+[tool.setuptools.package-data]
+asciify = ["webui.html"]

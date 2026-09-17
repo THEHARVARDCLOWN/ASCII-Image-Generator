@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>asciify</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0e0f12; --panel: #16181d; --line: #262a32; --text: #e6e6e6; --muted: #8b919c;
+    --accent: #7cc4ff; --danger: #ff7b7b; --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .app { display: grid; grid-template-columns: 300px 1fr; height: 100vh; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); padding: 16px; overflow-y: auto; }
+  h1 { margin: 0 0 2px; font: 600 18px/1.2 ui-monospace, Consolas, monospace; letter-spacing: .5px; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+  fieldset { border: 0; padding: 0; margin: 0 0 14px; }
+  legend, label.title { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase;
+    letter-spacing: .06em; margin-bottom: 6px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .row output { font: 12px ui-monospace, Consolas, monospace; color: var(--text); min-width: 3.5em; text-align: right; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  select, input[type=text] { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 8px; font: inherit; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg label { text-align: center; cursor: pointer; color: var(--muted); }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg span { display: block; padding: 7px 0; }
+  .seg input:checked + span { color: var(--bg); background: var(--accent); }
+  .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .check { display: flex; gap: 8px; align-items: center; margin: 6px 0; cursor: pointer; }
+  .check input { accent-color: var(--accent); }
+  button { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+    padding: 8px 10px; font: inherit; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { width: 100%; background: var(--accent); color: #07121c; border-color: var(--accent); font-weight: 600; }
+  .downloads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  main { position: relative; display: flex; flex-direction: column; min-width: 0; }
+  .status { padding: 8px 14px; border-bottom: 1px solid var(--line); color: var(--muted);
+    font: 12px ui-monospace, Consolas, monospace; min-height: 34px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .status.error { color: var(--danger); }
+  iframe { flex: 1; width: 100%; border: 0; background: #0c0c0e; }
+  .drop { position: absolute; inset: 34px 0 0; display: grid; place-items: center; text-align: center; padding: 24px;
+    color: var(--muted); }
+  .drop .box { border: 1.5px dashed var(--line); border-radius: 14px; padding: 40px 48px; max-width: 460px; }
+  .drop pre { color: var(--accent); font: 12px/1.1 ui-monospace, Consolas, monospace; margin: 0 0 14px; }
+  body.dragging .drop { background: rgba(124,196,255,.06); }
+  body.dragging .drop .box { border-color: var(--accent); color: var(--text); }
+  .hidden { display: none !important; }
+  kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: auto 70vh; height: auto; }
+    aside { border-right: 0; border-bottom: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h1>asciify</h1>
+    <div class="sub">image &rarr; ASCII art &middot; <span id="version"></span></div>
+
+    <fieldset>
+      <button class="primary" id="pick" type="button">Choose image&hellip;</button>
+      <input id="file" type="file" accept="image/*" class="hidden">
+      <div class="sub" style="margin:6px 0 0" id="fileinfo">or drop a file anywhere, or paste with <kbd>Ctrl</kbd>+<kbd>V</kbd></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Mode</legend>
+      <div class="seg" role="radiogroup">
+        <label><input type="radio" name="mode" value="ascii" checked><span>ASCII</span></label>
+        <label><input type="radio" name="mode" value="edges"><span>Edges</span></label>
+        <label><input type="radio" name="mode" value="blocks"><span>Blocks</span></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <div class="row"><label class="title" for="width">Width (columns)</label><output for="width"></output></div>
+      <input id="width" type="range" min="20" max="400" step="2" value="140">
+    </fieldset>
+
+    <fieldset>
+      <label class="title" for="palette">Palette</label>
+      <select id="palette"></select>
+      <div class="sub" id="paletteinfo" style="margin:6px 0 0"></div>
+    </fieldset>
+
+    <fieldset id="rampset">
+      <label class="title" for="ramp">Character ramp</label>
+      <select id="ramp"></select>
+      <input id="customramp" type="text" class="hidden" placeholder="sparse → dense, e.g.  .:oO@" style="margin-top:6px" maxlength="128">
+    </fieldset>
+
+    <fieldset>
+      <div class="row"><label class="title" for="contrast">Auto-contrast</label><output for="contrast"></output></div>
+      <input id="contrast" type="range" min="0" max="1" step="0.05" value="1">
+      <div class="row"><label class="title" for="gamma">Gamma <span id="gammaauto">(auto)</span></label><output for="gamma"></output></div>
+      <input id="gamma" type="range" min="0.4" max="3" step="0.05" value="1.5">
+      <div class="row"><label class="title" for="saturation">Saturation</label><output for="saturation"></output></div>
+      <input id="saturation" type="range" min="0" max="2.5" step="0.05" value="1.25">
+      <div class="row" id="liftrow"><label class="title" for="lift">Ink lift</label><output for="lift"></output></div>
+      <input id="lift" type="range" min="0" max="1" step="0.05" value="0.5">
+      <div id="edgeset" class="hidden">
+        <div class="row"><label class="title" for="edge">Edge threshold</label><output for="edge"></output></div>
+        <input id="edge" type="range" min="0.1" max="2" step="0.05" value="0.6">
+      </div>
+      <div class="row"><label class="title" for="ratio">Cell ratio (w/h)</label><output for="ratio"></output></div>
+      <input id="ratio" type="range" min="0.3" max="1" step="0.01" value="0.5">
+    </fieldset>
+
+    <fieldset>
+      <label class="check"><input id="light" type="checkbox"> Light background</label>
+      <label class="check"><input id="dither" type="checkbox"> Dither</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Download</legend>
+      <div class="downloads">
+        <button type="button" data-format="html" disabled>HTML</button>
+        <button type="button" data-format="png" disabled>PNG</button>
+        <button type="button" data-format="txt" disabled>TXT</button>
+      </div>
+    </fieldset>
+  </aside>
+
+  <main>
+    <div class="status" id="status" aria-live="polite">No image yet</div>
+    <iframe id="preview" title="ASCII art preview" sandbox></iframe>
+    <div class="drop" id="drop">
+      <div class="box">
+<pre aria-hidden="true">  .:=+cvxoawdO8MQ&amp;@
+ drop an image here</pre>
+        JPEG, PNG, WebP, GIF, AVIF, TIFF, BMP (first frame of animations).<br>
+        Everything runs locally on this machine.
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const state = { file: null, name: "asciify", inflight: null, timer: 0, gammaTouched: false, maxBytes: 40 * 1024 * 1024 };
+  const statusEl = $("#status"), frame = $("#preview");
+
+  const setStatus = (text, error = false) => { statusEl.textContent = text; statusEl.classList.toggle("error", error); };
+  const mode = () => document.querySelector("input[name=mode]:checked").value;
+
+  function params(format) {
+    const q = new URLSearchParams({
+      format, mode: mode(), width: $("#width").value, palette: $("#palette").value,
+      contrast: $("#contrast").value, saturation: $("#saturation").value, lift: $("#lift").value,
+      edge: $("#edge").value, ratio: $("#ratio").value,
+      light: $("#light").checked ? "1" : "0", dither: $("#dither").checked ? "1" : "0",
+      gamma: state.gammaTouched ? $("#gamma").value : "auto",
+    });
+    const ramp = $("#ramp").value === "__custom" ? $("#customramp").value : $("#ramp").value;
+    q.set("ramp", ramp || "detailed");
+    return q;
+  }
+
+  async function post(format, signal) {
+    const res = await fetch("/api/convert?" + params(format), { method: "POST", body: state.file, signal });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || ("HTTP " + res.status));
+    }
+    return res;
+  }
+
+  async function render() {
+    if (!state.file) return;
+    state.inflight?.abort();
+    const ctrl = (state.inflight = new AbortController());
+    setStatus("Rendering…");
+    try {
+      const res = await post("html", ctrl.signal);
+      const html = await res.text();
+      if (ctrl !== state.inflight) return;
+      frame.srcdoc = html;
+      $("#drop").classList.add("hidden");
+      setStatus(`${state.name} · ${res.headers.get("X-Asciify-Source")} px → ${res.headers.get("X-Asciify-Grid")} cells · ${res.headers.get("X-Asciify-Ms")} ms`);
+    } catch (e) {
+      if (e.name !== "AbortError") setStatus(e.message, true);
+    }
+  }
+  const schedule = () => { clearTimeout(state.timer); state.timer = setTimeout(render, 140); };
+
+  function useFile(file) {
+    if (!file) return;
+    // Some platforms report "" for AVIF/HEIC/TIFF drops; the server validates the bytes either way.
+    if (file.type && !file.type.startsWith("image/")) return setStatus("That is not an image file.", true);
+    if (file.size > state.maxBytes) return setStatus(`File is larger than ${state.maxBytes / 1048576} MB.`, true);
+    state.file = file;
+    state.name = (file.name || "pasted-image").replace(/\.[^.]+$/, "") || "asciify";
+    $("#fileinfo").textContent = `${file.name || "pasted image"} · ${(file.size / 1024).toFixed(0)} KB`;
+    document.querySelectorAll("[data-format]").forEach((b) => (b.disabled = false));
+    render();
+  }
+
+  async function download(format) {
+    if (!state.file) return;
+    setStatus(`Preparing ${format.toUpperCase()}…`);
+    try {
+      const blob = await (await post(format)).blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${state.name}.${format}`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      setStatus(`Saved ${state.name}.${format}`);
+    } catch (e) { setStatus(e.message, true); }
+  }
+
+  function syncUi() {
+    const m = mode();
+    $("#edgeset").classList.toggle("hidden", m !== "edges");
+    $("#rampset").classList.toggle("hidden", m === "blocks");
+    $("#liftrow").classList.toggle("hidden", m === "blocks");
+    $("#lift").classList.toggle("hidden", m === "blocks");
+    $("#customramp").classList.toggle("hidden", $("#ramp").value !== "__custom");
+    if (!state.gammaTouched) $("#gamma").value = ($("#light").checked || m === "blocks") ? 1.0 : 1.5;
+    $("#gammaauto").textContent = state.gammaTouched ? "" : "(auto)";
+    document.querySelectorAll("output[for]").forEach((o) => (o.value = document.getElementById(o.htmlFor).value));
+    const opt = $("#palette").selectedOptions[0];
+    $("#paletteinfo").textContent = opt ? opt.dataset.description : "";
+  }
+
+  document.querySelector("aside").addEventListener("input", (e) => {
+    if (e.target.id === "gamma") state.gammaTouched = true;
+    syncUi(); schedule();
+  });
+  $("#gammaauto").addEventListener("click", () => { state.gammaTouched = false; syncUi(); schedule(); });
+  $("#pick").addEventListener("click", () => $("#file").click());
+  $("#file").addEventListener("change", (e) => useFile(e.target.files[0]));
+  document.querySelectorAll("[data-format]").forEach((b) => b.addEventListener("click", () => download(b.dataset.format)));
+
+  let depth = 0;
+  window.addEventListener("dragenter", (e) => { e.preventDefault(); depth++; document.body.classList.add("dragging"); $("#drop").classList.remove("hidden"); });
+  window.addEventListener("dragover", (e) => e.preventDefault());
+  window.addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; document.body.classList.remove("dragging"); if (state.file) $("#drop").classList.add("hidden"); } });
+  window.addEventListener("drop", (e) => {
+    e.preventDefault(); depth = 0; document.body.classList.remove("dragging");
+    const f = e.dataTransfer?.files?.[0];
+    if (f) useFile(f); else if (state.file) $("#drop").classList.add("hidden");
+  });
+  window.addEventListener("paste", (e) => {
+    if (e.target.matches("input[type=text]")) return;
+    const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith("image/"));
+    if (item) { e.preventDefault(); useFile(item.getAsFile()); }
+  });
+
+  fetch("/api/meta").then((r) => r.json()).then((meta) => {
+    $("#version").textContent = "v" + meta.version;
+    state.maxBytes = meta.maxUploadBytes;
+    $("#edge").value = meta.defaults.edge;
+    for (const p of meta.palettes) {
+      const o = new Option(p.name, p.name); o.dataset.description = p.description; $("#palette").add(o);
+    }
+    for (const [name, chars] of Object.entries(meta.ramps)) {
+      $("#ramp").add(new Option(`${name}   ${chars.length > 22 ? chars.slice(0, 22) + "…" : chars}`, name));
+    }
+    $("#ramp").add(new Option("custom…", "__custom"));
+    syncUi();
+  }).catch(() => setStatus("Could not reach the asciify server.", true));
+})();
+</script>
+</body>
+</html>
